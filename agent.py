@@ -1,12 +1,22 @@
 from collections import deque
 import heapq
+import math
 
 class SearchAgent:
     def __init__(self):
         # Step 1.3: Empty plan and active algorithm config
         self.plan = []
-        # Change this to 'DFS', 'BFS', or 'UCS' to test different algorithms
-        self.active_algo = 'BFS'
+        # Options: 'DFS', 'BFS', 'UCS', 'AStar'
+        self.active_algo = 'AStar'
+
+    # Step 1.1: Heuristic Functions
+    def manhattan_distance(self, pos, goal):
+        """Calculates Manhattan distance h(n) = |x1 - x2| + |y1 - y2|"""
+        return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
+
+    def euclidean_distance(self, pos, goal):
+        """Calculates Euclidean distance h(n) = sqrt((x1 - x2)^2 + (y1 - y2)^2)"""
+        return math.sqrt((pos[0] - goal[0]) ** 2 + (pos[1] - goal[1]) ** 2)
 
     def get_neighbors(self, state, grid_size, walls):
         """Helper function to get valid adjacent cells and movement actions."""
@@ -67,7 +77,7 @@ class SearchAgent:
     # 3. Uniform Cost Search (UCS)
     def ucs_search(self, start, goal, grid_size, walls):
         frontier = []
-        heapq.heappush(frontier, (0, start, [])) # Priority Queue
+        heapq.heappush(frontier, (0, start, []))  # Priority Queue
         reached = {}
 
         while frontier:
@@ -85,6 +95,43 @@ class SearchAgent:
                         heapq.heappush(frontier, (new_cost, next_state, path + [action]))
         return []
 
+    # Step 1.2: A* Search
+    def astar_search(self, start_pos, goal_pos, walls, grid_size, heuristic_type='manhattan'):
+        frontier = []
+        
+        # Calculate initial h(n)
+        if heuristic_type == 'manhattan':
+            h_start = self.manhattan_distance(start_pos, goal_pos)
+        else:
+            h_start = self.euclidean_distance(start_pos, goal_pos)
+            
+        # Push start node formatted as: (f_cost, g_cost, current_pos, path_taken)
+        heapq.heappush(frontier, (0 + h_start, 0, start_pos, []))
+        reached_states = set()
+
+        while frontier:
+            f_cost, g_cost, current_pos, path = heapq.heappop(frontier)
+
+            if current_pos == goal_pos:
+                return path
+
+            if current_pos not in reached_states:
+                reached_states.add(current_pos)
+                
+                for action, next_state, step_cost in self.get_neighbors(current_pos, grid_size, walls):
+                    if next_state not in reached_states:
+                        g_new = g_cost + step_cost
+                        
+                        if heuristic_type == 'manhattan':
+                            h_new = self.manhattan_distance(next_state, goal_pos)
+                        else:
+                            h_new = self.euclidean_distance(next_state, goal_pos)
+                            
+                        f_new = g_new + h_new
+                        heapq.heappush(frontier, (f_new, g_new, next_state, path + [action]))
+        return []
+
+    # Step 1.3: Decision Loop Integration
     def sense_and_act(self, percept):
         # Generate plan if empty
         if not self.plan:
@@ -96,13 +143,16 @@ class SearchAgent:
             walls = set(percept['walls'])
             grid_size = percept['grid_size']
 
-            # Find closest food
+            # Find closest food using Manhattan distance
             closest_food = min(
                 all_food,
-                key=lambda f: abs(f[0] - start_state[0]) + abs(f[1] - start_state[1])
+                key=lambda f: self.manhattan_distance(start_state, f)
             )
 
-            if self.active_algo == 'BFS':
+            # Route algorithm based on active selection
+            if self.active_algo == 'AStar':
+                self.plan = self.astar_search(start_state, closest_food, walls, grid_size, heuristic_type='manhattan')
+            elif self.active_algo == 'BFS':
                 self.plan = self.bfs_search(start_state, closest_food, grid_size, walls)
             elif self.active_algo == 'DFS':
                 self.plan = self.dfs_search(start_state, closest_food, grid_size, walls)
